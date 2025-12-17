@@ -10,6 +10,24 @@ attributes:
       - "long"
     value: "short"
 
+  # select RStudio-Server module
+  rserver:
+    widget: select
+    label: "RStudio-Server Version"
+    options:
+      - [ "2025.09.2-418", "2025.09.2-418" ]
+    display: true
+
+  # select the R module(s) that should be loaded
+  rapp:
+    widget: select
+    label: "R Version"
+    options:
+      - [ "4.3.1", "R/4.3.1-foss-2022b" ]
+      - [ "4.3.2", "R/4.3.2-gfbf-2023a" ]
+      - [ "4.5.1", "R/4.5.1-gfbf-2023a-bare-noSciPy" ]
+    display: true
+
   cores:
     widget: "number_field"
     label: "Number of cores"
