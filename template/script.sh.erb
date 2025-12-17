@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+echo "Running script.sh.erb script"
+
+
+echo "module purge"
+module purge
+
+module use /gpfs3/well/kir-scratch/sansom/mat611/easybuild/kir-test/skylake/modules/all
+# load RStudio Server
+echo "module load"
+module load <%= context.rserver %>
+
+# load R
+module load <%= context.rapp %>
+
+# RStudioServer doesn't inherit "ulimit -s" from system config /etc/security/limits.d/custom.conf
+# Therefore, we are setting it here
+ulimit -s unlimited
+
+#
+# Start RStudio Server
+#
+
+# PAM auth helper used by RStudio
+TMPDIR="$(mktemp -d)"
+export WORKING_DIR="<%= session.staged_root %>"
+export RSTUDIO_AUTH="$WORKING_DIR/bin/auth"
+
+#This is to resolve issue : https://github.com/nesi/nesi-ood-rstudio-server-app/issues/13
+if [ ! -f ~/.inputrc ] || ! grep -qF 'set enable-bracketed-paste off' ~/.inputrc; then
+    echo 'set enable-bracketed-paste off' >> ~/.inputrc
+fi
+
+#Try above first as auth wasn't working correctly with the following
+#export RSTUDIO_AUTH="${PWD}/bin/auth"
+
+# Generate an `rsession` wrapper script
+export RSESSION_WRAPPER_FILE="$WORKING_DIR/rsession.sh"
+(
+umask 077
+sed 's/^ \{2\}//' > "${RSESSION_WRAPPER_FILE}" << EOL
+  #!/usr/bin/env bash
+
+  # Log all output from this script
+  export RSESSION_LOG_FILE="$WORKING_DIR/rsession.log"
+  exec &>>"\${RSESSION_LOG_FILE}"
+
+
+
+  # Explicitly set R_LIBS_SITE based on the loaded R module
+  # Capture the current R_LIBS_SITE from the environment
+  export R_LIBS_SITE="${R_LIBS_SITE}"
+
+  # Launch the original command
+  echo "Launching rsession..."
+  set -x
+  exec rsession --r-libs-user "${R_LIBS_USER}" "\${@}"
+EOL
+)
+chmod 700 "${RSESSION_WRAPPER_FILE}"
+
+# Generate a database.conf file
+export DBCONF="${PWD}/database.conf"
+(
+umask 077
+sed 's/^ \{2\}//' > "${DBCONF}" << EOL
+  # set database location
+  provider=sqlite
+  directory=/tmp/${USER}/rstudio-server/db
+EOL
+)
+chmod 700 "${DBCONF}"
+
+# Set working directory to home directory
+cd "${HOME}"
+
+# Output debug info
+module list
+
+# Launch the RStudio Server
+echo "Starting up rserver..."
+set -x
+rserver \
+  --www-port ${WWW_PORT} \
+  --auth-none 0 \
+  --auth-pam-helper-path "${RSTUDIO_AUTH}" \
+  --auth-encrypt-password 0 \
+  --rsession-path "${RSESSION_WRAPPER_FILE}" \
+  --server-data-dir "${TMPDIR}" \
+  --secure-cookie-key-file "${TMPDIR}/rstudio-server/secure-cookie-key" \
+  --database-config-file "${DBCONF}" \
+  --server-daemonize=0 \
+  --auth-timeout-minutes=0 \
+  --auth-stay-signed-in-days=30 \
+  --server-user $(whoami)
