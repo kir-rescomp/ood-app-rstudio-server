@@ -1,0 +1,27 @@
+# This script (`before.sh.erb`) is sourced directly into the main Bash script
+# that is run when the batch job starts up. It is called before the `script.sh`
+# is forked off into a separate process.
+
+# Define CSRF_TOKEN and export it for auth
+<%-
+  require 'securerandom'
+  csrftoken=SecureRandom.uuid
+-%>
+export csrf_token="<%= csrftoken %>"
+
+# Find available port to run server on
+export port=$(find_port ${host})
+export WWW_PORT=${port}
+
+# Define a password and export it for RStudio authentication
+export password="$(create_passwd 16)"
+
+# These are set by pam on normal ssh login
+# set of environment variables related to lmod paths and bash env. Removed for the moment
+
+echo "host is: ${host}"
+echo "port is: ${port}"
+echo "password is: ${password}"
+echo "csrf_token is: ${csrf_token}"
+
+export RSTUDIO_PASSWORD="${password}"
