@@ -4,11 +4,11 @@
   date.setTime(date.getTime() + (7*24*60*60*1000));
   let expires = "expires=" + date.toUTCString();
   let cookiePath = "path=/rnode/" + "<%= host.to_s %>" + "/" + "<%= port.to_s %>/";
-  let cookie = `csrf-token=<%= csrf_token %>;${expires};${cookiePath};SameSite=strict;secure`;
+  let cookie = `csrf-token=<%= csrf_token %>;${expires};${cookiePath};SameSite=lax;secure`;
   document.cookie = cookie;
 })();
 </script>
-<form action="/rnode/<%= host %>/<%= port %>/auth-do-sign-in" method="post">
+<form action="/rnode/<%= host %>/<%= port %>/auth-do-sign-in" method="post" target="_blank">
   <input type="hidden" name="username" value="<%= ENV["USER"] %>">
   <input type="hidden" name="password" value="<%= password %>">
   <input type="hidden" name="staySignedIn" value="1">
