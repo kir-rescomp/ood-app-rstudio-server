@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
 
-# Confirm username is supplied
-if [[ $# -lt 1 ]]; then
-  echo "Usage: auth USERNAME"
-  exit 1
-fi
-USERNAME="${1}"
+# This script handles authentication for RStudio Server web login
+# RStudio sends: username\npassword\n via stdin
+
+# Read username and password from stdin (sent by RStudio Server)
+read USERNAME
+read PASSWORD
+
+# Debug logging (optional - comment out in production)
+echo "Auth attempt for user: ${USERNAME}" >> /tmp/rstudio-auth-debug.log
+echo "Expected user: ${USER}" >> /tmp/rstudio-auth-debug.log
 
 # Confirm password environment variable exists
 if [[ -z ${RSTUDIO_PASSWORD} ]]; then
-  echo "The environment variable RSTUDIO_PASSWORD is not set"
+  echo "The environment variable RSTUDIO_PASSWORD is not set" >&2
   exit 1
 fi
 
-# Read in the password from user
-read -s -p "Password: " PASSWORD
-echo ""
-
+# Validate username and password
 if [[ ${USERNAME} == ${USER} && ${PASSWORD} == ${RSTUDIO_PASSWORD} ]]; then
-  echo "Successful authentication"
+  echo "Successful authentication" >&2
   exit 0
 else
-  echo "Invalid authentication"
+  echo "Invalid authentication" >&2
   exit 1
 fi
