@@ -5,9 +5,9 @@
 # Define CSRF_TOKEN and export it for auth
 <%-
   require 'securerandom'
-  csrftoken=SecureRandom.uuid
+  csrf_token = SecureRandom.uuid
 -%>
-export csrf_token="<%= csrftoken %>"
+export csrf_token="<%= csrf_token %>"
 
 # Find available port to run server on
 export port=$(find_port ${host})
