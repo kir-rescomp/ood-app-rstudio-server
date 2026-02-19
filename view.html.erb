@@ -1,10 +1,41 @@
-<form action="/rnode/<%= host %>/<%= port %>/auth-do-sign-in" method="post" target="_blank">
-  <input type="hidden" name="csrf-token" value="<%= csrf_token %>">
+<form id="rstudio-auto-login" action="/rnode/<%= host %>/<%= port %>/auth-do-sign-in" method="post" target="_blank">
+  <!-- NOTE: name must be `csrf_token` (underscore) -->
+  <input type="hidden" name="csrf_token" id="csrf_token_field" value="<%= csrf_token %>">
   <input type="hidden" name="username" value="<%= ENV["USER"] %>">
   <input type="hidden" name="password" value="<%= password %>">
   <input type="hidden" name="staySignedIn" value="1">
   <input type="hidden" name="appUri" value="">
-  <button class="btn btn-primary" type="submit">
-    <i class="fa fa-registered"></i> Connect to RStudio Server
-  </button>
+  <noscript>
+    <button class="btn btn-primary" type="submit">
+      <i class="fa fa-registered"></i> Connect to RStudio Server
+    </button>
+  </noscript>
 </form>
+
+<script>
+(function () {
+  // If the ERB-provided csrf_token is empty/null, try to read cookie named "csrf-token".
+  function readCookie(name) {
+    const pairs = document.cookie.split(';').map(c => c.trim());
+    for (const pair of pairs) {
+      const [k, v] = pair.split('=');
+      if (k === name) return decodeURIComponent(v || '');
+    }
+    return '';
+  }
+
+  const fld = document.getElementById('csrf_token_field');
+  if (!fld || fld.value.trim() === '') {
+    // try cookie name rstudio commonly sets: "csrf-token"
+    const fromCookie = readCookie('csrf-token') || readCookie('csrf_token') || '';
+    if (fromCookie) fld.value = fromCookie;
+  }
+
+  // If still empty, leave the form for manual submit so the user can see errors.
+  if (fld && fld.value.trim() !== '') {
+    // small delay ensures cookies from proxied GET have been set in some edge cases
+    setTimeout(() => document.getElementById('rstudio-auto-login').submit(), 120);
+  }
+})();
+</script>
+
