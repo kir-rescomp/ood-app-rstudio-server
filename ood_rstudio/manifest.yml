@@ -1,0 +1,10 @@
+---
+name: RStudio
+category: Interactive Apps
+subcategory: Servers
+role: batch_connect
+description: |
+  This app will launch [RStudio] an IDE for [R]
+
+  [RStudio]: https://www.rstudio.com/products/rstudio-server/
+  [R]: https://www.r-project.org/

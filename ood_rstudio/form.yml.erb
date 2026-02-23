@@ -1,0 +1,56 @@
+---
+cluster: slurm
+attributes:
+  rstudio_module:
+    label: RStudio module
+    required: true
+    cachable: true
+    help: Choose your RStudio module
+    widget: select
+    options:
+      - ["RStudio-Server/2023.09.1+494-foss-2023a-Java-11-R-4.3.2", "RStudio-Server/2023.09.1+494-foss-2023a-Java-11-R-4.3.2"]
+      - ["RStudio-Server/2022.07.2+576-foss-2022a-Java-11-R-4.2.1", "RStudio-Server/2022.07.2+576-foss-2022a-Java-11-R-4.2.1"]
+      - ["RStudio-Server/1.4.1717-foss-2021a-Java-11-R-4.1.0", "RStudio-Server/1.4.1717-foss-2021a-Java-11-R-4.1.0"]
+  extra_modules_script:
+    label: Extra modules script
+    help: If you'd like to load additional modules alongside RStudio-Server, put the 'module load ...' commands into a text file (one 'module load...' per line) and specify its path here
+    widget: text_field
+    required: false
+  cores:
+    label: Number of CPU cores
+    help: How many CPU cores to reserve for your session. NB Ensure this is within the maximum allowed by your chosen partition.
+    widget: number_field
+    min: 1
+    max: 48
+    step: 1
+    value: 1
+    cachable: true
+  ram:
+    widget: number_field
+    label: RAM in GB
+    help: How much RAM to reserve for your session. NB Ensure this is within the maximum allowed by your chosen partition
+    min: 4
+    max:  700
+    step: 1
+    value: 4
+    cachable: true
+  bc_num_hours:
+    widget: number_field
+    help: Maximum runtime in hours for your session. NB Ensure this is within the maximum allowed by your chosen partition
+    min: 1
+    max: 240
+    step: 1
+    value: 30
+    cachable: true
+  bc_email_on_started: false
+  auto_modules_RStudio-Server:
+    default: false
+form:
+  - auto_queues
+  #- auto_modules_RStudio-Server
+  - rstudio_module
+  - extra_modules_script
+  - cores
+  - ram
+  - bc_num_hours
+  - bc_email_on_started

@@ -1,0 +1,153 @@
+#!/bin/bash
+<%-
+  session_dir = session.staged_root
+%>
+# A wrapper to start rserver with recommended configuration settings.
+
+#############
+# constants #
+#############
+export WORKING_DIR=<%= session_dir %>
+export RSTUDIO_AUTH=$WORKING_DIR/bin/auth
+export RSTUDIO_DATA_DIR=$WORKING_DIR/rstudio
+export RSTUDIO_DATA_DIR_SYMLINK=/tmp/ondemand-rstudio-tmp-<%= session.id %>
+export COOKIE_FILE=$RSTUDIO_DATA_DIR/secure-cookie-file
+export RSERVER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rserver.conf
+export RSESSION_CONFIG_FILE=$RSTUDIO_DATA_DIR/rsession.conf
+export RDATABASE_CONFIG_FILE=$RSTUDIO_DATA_DIR/db.conf
+export RSTUDIO_LOGS_DIR=$RSTUDIO_DATA_DIR/logs
+# NB The form.yml.erb must supply either the auto_modules_RStudio_Server attribute or the rstudio_module attribue
+export RSTUDIO_MODULE=<%= context["auto_modules_RStudio-Server"] || context.rstudio_module %>
+export RSERVER_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rserver.conf
+export RSESSION_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rsession.conf
+export RDATABASE_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/db.conf
+
+###################
+# welcome message #
+###################
+echo "Preparing rstudio configuration..."
+
+module purge
+if ! module is-avail "${RSTUDIO_MODULE}"; then
+  if (MODULEPATH="/apps/eb/el8/skylake/modules/all:${MODULEPATH}" module is-avail "${RSTUDIO_MODULE}"); then
+    module use "/apps/eb/el8/skylake/modules/all"
+  else
+    echo "ERROR: \"${RSTUDIO_MODULE}\" neither on default MODULEPATH nor \"/apps/eb/el8/skylake/modules/all\" - please contact bmrc-help@medsci.ox.ac.uk"
+    exit 100
+  fi
+fi
+module load $RSTUDIO_MODULE
+
+################################################################
+# load the module helper script (if the user has supplied one) #
+################################################################
+<% if not context.extra_modules_script.blank? %>
+if [[ -f <%= context.extra_modules_script %> ]]; then
+  source <%= context.extra_modules_script %>
+fi
+<% end %>
+
+##############################
+# Configure RSTUDIO_DATA_DIR #
+##############################
+# make a directory for server data
+mkdir -p $RSTUDIO_DATA_DIR
+# create a symlink to the RSTUDIO_DATA_DIR. This is a workaround for RStudio complaining that the path to this directory is too long - essentially, we use the symlink purely as a means to shorten the path
+ln -s $RSTUDIO_DATA_DIR $RSTUDIO_DATA_DIR_SYMLINK
+
+# delete any very old symlinks that are presumed no longer required
+find /tmp -maxdepth 1 -type l -name "ondemand-rstudio-tmp*" -user $(whoami) -mtime +60 -delete
+
+###############################
+# create a secure-cookie-file #
+###############################
+cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1 > $COOKIE_FILE
+
+###################################
+# Maybe set server data directory #
+###################################
+
+# Later versions of rserver default to storing server configuration in /var/run which may cause a permissions error when trying to start
+# Where needed, we override this setting to use the SERVER_DATA_DIR setting above
+# NB We test for the --server-data-dir configuration parameter - where present, we set it
+
+if rserver --help 2>&1 | grep -e "--server-data-dir" &> /dev/null; then
+    EXTRA_OPTS="--server-data-dir=${RSTUDIO_DATA_DIR_SYMLINK}"
+fi
+
+##########################
+# Maybe set rserver-user #
+##########################
+if rserver --help 2>&1 | grep -e "--server-user" &> /dev/null; then
+	EXTRA_OPTS="${EXTRA_OPTS} --server-user=$(whoami)"
+fi
+
+#######################
+# determine R version #
+#######################
+
+RVERSION=$(R --version | head -n 1 | grep -oe "[0-9]\.[0-9]\.[0-9]")
+RVERSION_MAJOR=${RVERSION:0:1}
+RVERSION_MINOR=${RVERSION:2:1}
+RVERSION_POINT=${RVERSION:4:1}
+
+# determine if we need a local database configure for R 4.1 or greater
+if [[ "$RVERSION_MAJOR" -ge 4 && "$RVERSION_MINOR" -ge 1 ]]; then
+    RVERSION_REQUIRES_DB=true
+else
+    RVERSION_REQUIRES_DB=false
+fi
+
+###############################
+# Create database config file #
+###############################
+
+if [[ "$RVERSION_REQUIRES_DB" == true ]]; then
+    echo -e "provider=sqlite\ndirectory=${RSTUDIO_DATA_DIR}/db" > $RDATABASE_USER_CONFIG_FILE
+    EXTRA_OPTS="$EXTRA_OPTS --database-config-file=$RDATABASE_USER_CONFIG_FILE"
+fi
+
+#######################################
+# generate local rsession-config-file #
+#######################################
+
+# RStudio will run R in a new, fresh terminal session. So while RStudio sessions will inherit any environment variables that are defined in the system-wide shell startup files or the user's shell startup files, it WILL NOT inherit any values for e.g. R_LIBS or LD_LIBRARY_PATH that the user has changed e.g. by loading modules
+
+# For this reason, we need to pas those variables through to R by other means.
+
+# LD_LIBRARY path can be specified in the rsession config file. For this reason, we make a copy of the main rsession file and add the LD_LIBRARY_PATH in there
+
+# remove any old/stale versions of the user config files
+rm -f $RSESSION_USER_CONFIG_FILE
+rm -f $RSERVER_USER_CONFIG_FILE
+
+# append details of LD_LIBRARY_PATH to rserver config file - https://docs.rstudio.com/ide/server-pro/latest/r-sessions.html#locating-shared-libraries
+echo "rsession-ld-library-path=$LD_LIBRARY_PATH" >> $RSERVER_USER_CONFIG_FILE
+
+# append details of R_LIBS and R_LIBS_SITE to rsession-config-file - https://docs.rstudio.com/ide/server-pro/latest/r-sessions.html#package-installation
+
+# copy the value of R_LIBS
+R_LIBS_PATHS=$R_LIBS
+
+# if R_LIBS_SITE has a value, add it to the paths
+if [[ ! -z "R_LIBS_SITE" ]]; then
+    R_LIBS_PATHS=$R_LIBS_PATHS:$R_LIBS_SITE
+fi
+
+# copy R_LIBS_PATHS into the session config file
+echo "r-libs-user=$R_LIBS_PATHS" >> $RSESSION_USER_CONFIG_FILE
+
+#################
+# start rserver #
+#################
+
+# pass execution to rserver
+rserver --config-file=$RSERVER_USER_CONFIG_FILE \
+  --rsession-config-file=$RSESSION_USER_CONFIG_FILE \
+  --secure-cookie-key-file=$COOKIE_FILE \
+  --server-daemonize=0 \
+  --www-port $port \
+  --rsession-which-r=$(which R) \
+  --auth-none 0 \
+  --auth-encrypt-password 0 \
+  --auth-pam-helper-path "${RSTUDIO_AUTH}" ${EXTRA_OPTS}
