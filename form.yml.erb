@@ -1,59 +1,66 @@
 ---
-cluster: "slurm"
-
+cluster: slurm
 attributes:
-  auto_queues:
-    widget: "select"
-    label: "Partition/Queue"
-    options:
-      - "short"
-      - "long"
-    value: "short"
-
-  # select RStudio-Server module
-  rserver:
+  rstudio_module:
+    label: RStudio module
+    required: true
+    cachable: true
+    help: Choose your RStudio module
     widget: select
-    label: "RStudio-Server Version"
     options:
       - [ "2025.09.2-418", "RStudio-Server/2025.09.2-418" ]
-      - [ "2024.12.1-563", "RStudio-Server/2024.12.1-563" ]
-    display: true
-
-  # select the R module(s) that should be loaded
-  rapp:
+  rmodule:
+    label: R  module
+    required: true
+    cachable: true
+    help: Choose your R module
     widget: select
-    label: "R Version"
     options:
       - [ "4.3.1", "R/4.3.1-foss-2022b" ]
       - [ "4.3.2", "R/4.3.2-gfbf-2023a" ]
       - [ "4.5.1", "R/4.5.1-gfbf-2023a-bare-noSciPy" ]
-    display: true
 
+  extra_modules_script:
+    label: Extra modules script
+    help: If you'd like to load additional modules alongside RStudio-Server, put the 'module load ...' commands into a text file (one 'module load...' per line) and specify its path here
+    widget: text_field
+    required: false
   cores:
-    widget: "number_field"
-    label: "Number of cores"
+    label: Number of CPU cores
+    help: How many CPU cores to reserve for your session. NB Ensure this is within the maximum allowed by your chosen partition.
+    widget: number_field
     min: 1
-    max: 8
-    value: 2
-
+    max: 48
+    step: 1
+    value: 1
+    cachable: true
   ram:
-    widget: "number_field"
-    label: "Memory (GB)"
-    min: 1
-    max: 64
+    widget: number_field
+    label: RAM in GB
+    help: How much RAM to reserve for your session. NB Ensure this is within the maximum allowed by your chosen partition
+    min: 4
+    max:  700
+    step: 1
     value: 4
-
+    cachable: true
   bc_num_hours:
-    widget: "number_field"
-    label: "Number of hours"
+    widget: number_field
+    help: Maximum runtime in hours for your session. NB Ensure this is within the maximum allowed by your chosen partition
     min: 1
-    max: 30:00:00
-    value: 2
-
+    max: 240
+    step: 1
+    value: 30
+    cachable: true
+  bc_email_on_started: false
+  auto_modules_RStudio-Server:
+    default: false
 form:
   - auto_queues
-  - rserver
-  - rapp
+  #- auto_modules_RStudio-Server
+  - rstudio_module
+  - rmodule
+  - extra_modules_script
   - cores
   - ram
   - bc_num_hours
+  - bc_email_on_started

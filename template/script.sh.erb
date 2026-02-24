@@ -1,95 +1,153 @@
-#!/usr/bin/env bash
-echo "Running script.sh.erb script"
-
-
-echo "module purge"
+#!/bin/bash
+<%-
+  session_dir = session.staged_root
+%>
+# A wrapper to start rserver with recommended configuration settings.
 module purge
+module use "/apps/eb/el8/skylake/modules/all"
+module use "/gpfs3/well/kir-scratch/sansom/mat611/easybuild/kir-test/skylake/modules/all"
+module use "/apps/kir/eb/skylake/modules/all"
 
-module use /gpfs3/well/kir-scratch/sansom/mat611/easybuild/kir-test/skylake/modules/all
-# load RStudio Server
-echo "module load"
-module load <%= context.rserver %>
 
-# load R
-module load <%= context.rapp %>
 
-# RStudioServer doesn't inherit "ulimit -s" from system config /etc/security/limits.d/custom.conf
-# Therefore, we are setting it here
-ulimit -s unlimited
+#############
+# constants #
+#############
+export WORKING_DIR=<%= session_dir %>
+export RSTUDIO_AUTH=$WORKING_DIR/bin/auth
+export RSTUDIO_DATA_DIR=$WORKING_DIR/rstudio
+export RSTUDIO_DATA_DIR_SYMLINK=/tmp/ondemand-rstudio-tmp-<%= session.id %>
+export COOKIE_FILE=$RSTUDIO_DATA_DIR/secure-cookie-file
+export RSERVER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rserver.conf
+export RSESSION_CONFIG_FILE=$RSTUDIO_DATA_DIR/rsession.conf
+export RDATABASE_CONFIG_FILE=$RSTUDIO_DATA_DIR/db.conf
+export RSTUDIO_LOGS_DIR=$RSTUDIO_DATA_DIR/logs
+# NB The form.yml.erb must supply either the auto_modules_RStudio_Server attribute or the rstudio_module attribue
+export RSTUDIO_MODULE=<%= context.rstudio_module %>
+export RSERVER_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rserver.conf
+export RSESSION_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/rsession.conf
+export RDATABASE_USER_CONFIG_FILE=$RSTUDIO_DATA_DIR/db.conf
 
-#
-# Start RStudio Server
-#
+###################
+# welcome message #
+###################
+echo "Preparing rstudio configuration..."
 
-# PAM auth helper used by RStudio
-TMPDIR="$(mktemp -d)"
-export WORKING_DIR="<%= session.staged_root %>"
-export RSTUDIO_AUTH="$WORKING_DIR/bin/auth"
+module load $RSTUDIO_MODULE
+module load <%= context.rmodule %>
 
-#This is to resolve issue : https://github.com/nesi/nesi-ood-rstudio-server-app/issues/13
-if [ ! -f ~/.inputrc ] || ! grep -qF 'set enable-bracketed-paste off' ~/.inputrc; then
-    echo 'set enable-bracketed-paste off' >> ~/.inputrc
+################################################################
+# load the module helper script (if the user has supplied one) #
+################################################################
+<% if not context.extra_modules_script.blank? %>
+if [[ -f <%= context.extra_modules_script %> ]]; then
+  source <%= context.extra_modules_script %>
+fi
+<% end %>
+
+##############################
+# Configure RSTUDIO_DATA_DIR #
+##############################
+# make a directory for server data
+mkdir -p $RSTUDIO_DATA_DIR
+# create a symlink to the RSTUDIO_DATA_DIR. This is a workaround for RStudio complaining that the path to this directory is too long - essentially, we use the symlink purely as a means to shorten the path
+ln -s $RSTUDIO_DATA_DIR $RSTUDIO_DATA_DIR_SYMLINK
+
+# delete any very old symlinks that are presumed no longer required
+find /tmp -maxdepth 1 -type l -name "ondemand-rstudio-tmp*" -user $(whoami) -mtime +60 -delete
+
+###############################
+# create a secure-cookie-file #
+###############################
+cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1 > $COOKIE_FILE
+
+###################################
+# Maybe set server data directory #
+###################################
+
+# Later versions of rserver default to storing server configuration in /var/run which may cause a permissions error when trying to start
+# Where needed, we override this setting to use the SERVER_DATA_DIR setting above
+# NB We test for the --server-data-dir configuration parameter - where present, we set it
+
+if rserver --help 2>&1 | grep -e "--server-data-dir" &> /dev/null; then
+    EXTRA_OPTS="--server-data-dir=${RSTUDIO_DATA_DIR_SYMLINK}"
 fi
 
-#Try above first as auth wasn't working correctly with the following
-#export RSTUDIO_AUTH="${PWD}/bin/auth"
+##########################
+# Maybe set rserver-user #
+##########################
+if rserver --help 2>&1 | grep -e "--server-user" &> /dev/null; then
+	EXTRA_OPTS="${EXTRA_OPTS} --server-user=$(whoami)"
+fi
 
-# Generate an `rsession` wrapper script
-export RSESSION_WRAPPER_FILE="$WORKING_DIR/rsession.sh"
-(
-umask 077
-sed 's/^ \{2\}//' > "${RSESSION_WRAPPER_FILE}" << EOL
-  #!/usr/bin/env bash
+#######################
+# determine R version #
+#######################
 
-  # Log all output from this script
-  export RSESSION_LOG_FILE="$WORKING_DIR/rsession.log"
-  exec &>>"\${RSESSION_LOG_FILE}"
+RVERSION=$(R --version | head -n 1 | grep -oe "[0-9]\.[0-9]\.[0-9]")
+RVERSION_MAJOR=${RVERSION:0:1}
+RVERSION_MINOR=${RVERSION:2:1}
+RVERSION_POINT=${RVERSION:4:1}
 
+# determine if we need a local database configure for R 4.1 or greater
+if [[ "$RVERSION_MAJOR" -ge 4 && "$RVERSION_MINOR" -ge 1 ]]; then
+    RVERSION_REQUIRES_DB=true
+else
+    RVERSION_REQUIRES_DB=false
+fi
 
+###############################
+# Create database config file #
+###############################
 
-  # Explicitly set R_LIBS_SITE based on the loaded R module
-  # Capture the current R_LIBS_SITE from the environment
-  export R_LIBS_SITE="${R_LIBS_SITE}"
+if [[ "$RVERSION_REQUIRES_DB" == true ]]; then
+    echo -e "provider=sqlite\ndirectory=${RSTUDIO_DATA_DIR}/db" > $RDATABASE_USER_CONFIG_FILE
+    EXTRA_OPTS="$EXTRA_OPTS --database-config-file=$RDATABASE_USER_CONFIG_FILE"
+fi
 
-  # Launch the original command
-  echo "Launching rsession..."
-  set -x
-  exec rsession --r-libs-user "${R_LIBS_USER}" "\${@}"
-EOL
-)
-chmod 700 "${RSESSION_WRAPPER_FILE}"
+#######################################
+# generate local rsession-config-file #
+#######################################
 
-# Generate a database.conf file
-export DBCONF="${PWD}/database.conf"
-(
-umask 077
-sed 's/^ \{2\}//' > "${DBCONF}" << EOL
-  # set database location
-  provider=sqlite
-  directory=/tmp/${USER}/rstudio-server/db
-EOL
-)
-chmod 700 "${DBCONF}"
+# RStudio will run R in a new, fresh terminal session. So while RStudio sessions will inherit any environment variables that are defined in the system-wide shell startup files or the user's shell startup files, it WILL NOT inherit any values for e.g. R_LIBS or LD_LIBRARY_PATH that the user has changed e.g. by loading modules
 
-# Set working directory to home directory
-cd "${HOME}"
+# For this reason, we need to pas those variables through to R by other means.
 
-# Output debug info
-module list
+# LD_LIBRARY path can be specified in the rsession config file. For this reason, we make a copy of the main rsession file and add the LD_LIBRARY_PATH in there
 
-# Launch the RStudio Server
-echo "Starting up rserver..."
-set -x
-rserver \
-  --www-port ${WWW_PORT} \
-  --auth-none 0 \
-  --auth-pam-helper-path "${RSTUDIO_AUTH}" \
-  --auth-encrypt-password 0 \
-  --rsession-path "${RSESSION_WRAPPER_FILE}" \
-  --server-data-dir "${TMPDIR}" \
-  --secure-cookie-key-file "${TMPDIR}/rstudio-server/secure-cookie-key" \
-  --database-config-file "${DBCONF}" \
+# remove any old/stale versions of the user config files
+rm -f $RSESSION_USER_CONFIG_FILE
+rm -f $RSERVER_USER_CONFIG_FILE
+
+# append details of LD_LIBRARY_PATH to rserver config file - https://docs.rstudio.com/ide/server-pro/latest/r-sessions.html#locating-shared-libraries
+echo "rsession-ld-library-path=$LD_LIBRARY_PATH" >> $RSERVER_USER_CONFIG_FILE
+
+# append details of R_LIBS and R_LIBS_SITE to rsession-config-file - https://docs.rstudio.com/ide/server-pro/latest/r-sessions.html#package-installation
+
+# copy the value of R_LIBS
+R_LIBS_PATHS=$R_LIBS
+
+# if R_LIBS_SITE has a value, add it to the paths
+if [[ ! -z "R_LIBS_SITE" ]]; then
+    R_LIBS_PATHS=$R_LIBS_PATHS:$R_LIBS_SITE
+fi
+
+# copy R_LIBS_PATHS into the session config file
+if [[ -n "$R_LIBS_PATHS" ]]; then
+    echo "r-libs-user=$R_LIBS_PATHS" >> $RSESSION_USER_CONFIG_FILE
+fi
+
+#################
+# start rserver #
+#################
+
+# pass execution to rserver
+rserver --config-file=$RSERVER_USER_CONFIG_FILE \
+  --rsession-config-file=$RSESSION_USER_CONFIG_FILE \
+  --secure-cookie-key-file=$COOKIE_FILE \
   --server-daemonize=0 \
-  --auth-timeout-minutes=0 \
-  --auth-stay-signed-in-days=30 \
-  --server-user $(whoami)
+  --www-port $port \
+  --rsession-which-r=$(which R) \
+  --auth-none 0 \
+  --auth-encrypt-password 0 \
+  --auth-pam-helper-path "${RSTUDIO_AUTH}" ${EXTRA_OPTS}
