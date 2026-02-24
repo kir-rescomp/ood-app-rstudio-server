@@ -1,13 +1,12 @@
-# Batch Connect - OSC RStudio Server
+# RStudio Server app for BMRC OOD 
 
 ![GitHub Release](https://img.shields.io/github/release/osc/bc_osc_rstudio_server.svg)
 [![GitHub License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-# Usage
+<p align="center"
+<img src="./icon.png"/>
+</p>
 
-This repository provides a basic RStudio app for use with OnDemand.
-
-*IMPORTANT* This RStudio app is intentionally incomplete and must be completed by adding local files for `form.yml.erb` and `submit.yml.erb`. Generic versions of these files cannot be provided because they depend on the local OnDemand setup.
 
 # `form.yml.erb` requirements
 
