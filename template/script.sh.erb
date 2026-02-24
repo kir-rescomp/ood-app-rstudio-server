@@ -3,9 +3,10 @@
   session_dir = session.staged_root
 %>
 # A wrapper to start rserver with recommended configuration settings.
+
+# Since some modules are coming from the KIR tree, assing both to module use
 module purge
 module use "/apps/eb/el8/skylake/modules/all"
-module use "/gpfs3/well/kir-scratch/sansom/mat611/easybuild/kir-test/skylake/modules/all"
 module use "/apps/kir/eb/skylake/modules/all"
 
 
