@@ -1,5 +1,5 @@
 ---
-name: RStudio
+name: RStudio (KIR-2026)
 category: Interactive Apps
 subcategory: Servers
 role: batch_connect
