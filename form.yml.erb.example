@@ -1,0 +1,39 @@
+---
+cluster: slurm
+attributes:
+  bc_email_on_started: false
+  bc_queue: win
+  bc_account: win.prj
+  rstudio_module:
+     label: "RStudio version"
+     widget: select
+     options:
+       - ['RStudio-Server/2022.07.2+576-foss-2022a-Java-11-R-4.2.1', 'RStudio-Server/2022.07.2+576-foss-2022a-Java-11-R-4.2.1']
+       - ['RStudio-Server/1.4.1717-foss-2021a-Java-11-R-4.1.0', 'RStudio-Server/1.4.1717-foss-2021a-Java-11-R-4.1.0']
+  extra_modules_script:
+    label: Extra modules script
+    help: If you'd like to load additional modules alongside RStudio-Server, put the 'module load ...' commands into a file and specify it here
+    widget: text_field
+    required: false
+  session_size:
+    label: "Session size"
+    widget: select
+    options:
+      - ["Standard (2 CPU, 50GB RAM)", "2"]
+      - ["Large (4 CPU, 100GB RAM)", "4"]
+      - ["XLarge (6 CPU, 150GB RAM)", "6"]
+  duration_in_days:
+    label: Session Duration (days)
+    help: How many days should your session last
+    min: 1
+    max: 5
+    value: 5
+    cachable: true
+form:
+  - bc_email_on_started
+  - bc_queue
+  - bc_account
+  - rstudio_module
+  - extra_modules_script
+  - session_size
+  - duration_in_days
