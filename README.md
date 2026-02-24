@@ -3,8 +3,8 @@
 ![GitHub Release](https://img.shields.io/github/release/osc/bc_osc_rstudio_server.svg)
 [![GitHub License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-<p align="center"
-<img src="./icon.png"/>
+<p align="center">
+<img src="./icon.png" width="300"/>
 </p>
 
 
