@@ -120,6 +120,10 @@ fi
 rm -f $RSESSION_USER_CONFIG_FILE
 rm -f $RSERVER_USER_CONFIG_FILE
 
+# Ensure rsession.conf always exists - rserver requires the file to be present
+# even if empty (no r-libs-user override needed)
+touch $RSESSION_USER_CONFIG_FILE
+
 # append details of LD_LIBRARY_PATH to rserver config file - https://docs.rstudio.com/ide/server-pro/latest/r-sessions.html#locating-shared-libraries
 echo "rsession-ld-library-path=$LD_LIBRARY_PATH" >> $RSERVER_USER_CONFIG_FILE
 
@@ -129,12 +133,16 @@ echo "rsession-ld-library-path=$LD_LIBRARY_PATH" >> $RSERVER_USER_CONFIG_FILE
 R_LIBS_PATHS=$R_LIBS
 
 # if R_LIBS_SITE has a value, add it to the paths
-if [[ ! -z "R_LIBS_SITE" ]]; then
-    R_LIBS_PATHS=$R_LIBS_PATHS:$R_LIBS_SITE
+# NB: use $R_LIBS_SITE (with $) to evaluate the variable - previously this was
+# written without the $ which meant the condition was always true (literal string)
+if [[ -n "$R_LIBS_SITE" ]]; then
+    R_LIBS_PATHS="${R_LIBS_PATHS}:${R_LIBS_SITE}"
 fi
 
-# copy R_LIBS_PATHS into the session config file
-if [[ -n "$R_LIBS_PATHS" ]]; then
+# Only write r-libs-user if the result is a real path (not empty or a bare colon)
+# A bare colon can result when both R_LIBS and R_LIBS_SITE are unset, and would
+# override R's default personal library path causing package installs to fail
+if [[ -n "$R_LIBS_PATHS" && "$R_LIBS_PATHS" != ":" ]]; then
     echo "r-libs-user=$R_LIBS_PATHS" >> $RSESSION_USER_CONFIG_FILE
 fi
 
