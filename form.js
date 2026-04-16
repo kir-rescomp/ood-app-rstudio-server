@@ -1,53 +1,47 @@
 // Map partition names to their time limits in hours
 const partitionMaxHours = {
-  "short":               30,   // 1-06:00:00
-  "long":               240,   // 10-00:00:00
+  "short":               30,
+  "long":               240,
   "himem":              240,
+  "gpu_interactive":     12,
+  "gpu_p100_16gb":       60,
+  "gpu_v100_16gb":       60,
+  "gpu_v100_32gb":       60,
+  "gpu_a100_40gb":       60,
+  "gpu_a100_80gb":       60,
+  "gpu_rtx8000_48gb":    60,
+  "gpu_gh200_144gb":     60,
   "relion":             240,
   "fraser":             240,
   "brcgel":             240,
   "win":                240,
   "cloudcomp":          240,
-  "gpu_short":            4,   // 4:00:00
-  "gpu_long":            60,   // 2-12:00:00
-  "gpu_relion":         168,   // 7-00:00:00
-  "gpu_long_palamara":  168,
-  "gpu_long_zhang":     168,
-  "gpu_mig_test":         4,
-  "gpu_cryosparc":      168,
-  "gpu_interactive":     12,
-  "gpu_limit":          168,
-  "gpu_gh200":         1440,   // 60-00:00:00
-  "gpu_a100_80gb":       60,
-  "gpu_p100_16gb":       60,
-  "gpu_v100_16gb":       60,
-  "gpu_v100_32gb":       60,
-  "gpu_a100_40gb":       60,
-  "gpu_rtx6000_24gb":    60,
-  "gpu_rtx8000_48gb":    60,
-  "gpu_l4_24gb":         60,
-  "gpu_l40s_48gb":       60,
-  "gpu_gh200_144gb":     60,
-  "gpu_inter":           12,
-  "gpu_strubi":         168,
-  "gpu_cs":             168,
 };
 
-function updateMaxHours() {
-  const partition = $("#batch_connect_session_context_auto_queues").val();
-  const maxHours  = partitionMaxHours[partition] || 240;
-  const hoursField = $("#batch_connect_session_context_bc_num_hours");
+// All GPU partitions that require a Slurm GPU account
+const gpuPartitions = new Set([
+  "gpu_interactive",
+  "gpu_p100_16gb",
+  "gpu_v100_16gb",
+  "gpu_v100_32gb",
+  "gpu_a100_40gb",
+  "gpu_a100_80gb",
+  "gpu_rtx8000_48gb",
+  "gpu_gh200_144gb",
+]);
 
-  // Update the max attribute
+function updateMaxHours() {
+  const partition   = $("#batch_connect_session_context_auto_queues").val();
+  const maxHours    = partitionMaxHours[partition] || 240;
+  const hoursField  = $("#batch_connect_session_context_bc_num_hours");
+
   hoursField.attr("max", maxHours);
 
-  // Clamp the current value if it exceeds the new max
   const currentVal = parseInt(hoursField.val(), 10);
   if (currentVal > maxHours) {
     hoursField.val(maxHours);
   }
 
-  // Update the help text to reflect the limit
   hoursField.closest(".form-group")
     .find(".form-text")
     .text(
@@ -56,10 +50,31 @@ function updateMaxHours() {
     );
 }
 
-$(document).ready(function () {
-  // Run on page load to set correct state for cached/default partition
-  updateMaxHours();
+function updateGpuAccountField() {
+  const partition      = $("#batch_connect_session_context_auto_queues").val();
+  const isGpu          = gpuPartitions.has(partition);
+  const gpuAccountGroup = $("#batch_connect_session_context_gpu_account")
+                            .closest(".form-group");
 
-  // Run whenever the partition changes
-  $("#batch_connect_session_context_auto_queues").on("change", updateMaxHours);
+  if (isGpu) {
+    gpuAccountGroup.show();
+    // Make the field required so the form won't submit without it
+    $("#batch_connect_session_context_gpu_account").attr("required", true);
+  } else {
+    gpuAccountGroup.hide();
+    // Remove required and clear the value so it doesn't block submission
+    $("#batch_connect_session_context_gpu_account")
+      .removeAttr("required")
+      .val("");
+  }
+}
+
+$(document).ready(function () {
+  updateMaxHours();
+  updateGpuAccountField();
+
+  $("#batch_connect_session_context_auto_queues").on("change", function () {
+    updateMaxHours();
+    updateGpuAccountField();
+  });
 });
