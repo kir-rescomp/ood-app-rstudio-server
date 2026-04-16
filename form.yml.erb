@@ -49,7 +49,7 @@ attributes:
     label: RAM in GB
     help: How much RAM to reserve for your session. NB Ensure this is within the maximum allowed by your chosen partition
     min: 2
-    max:  96
+    max:  176
     step: 1
     value: 4
     cachable: true
@@ -68,7 +68,7 @@ attributes:
     label: GPU Slurm account
     help: >
       Required for GPU partitions. Enter the Slurm account that has been
-      granted GPU access (e.g. <code>yourgroup_gpu</code>).
+      granted GPU access (e.g. <code>gpu_yourgroup.prj</code>).
       CPU partitions do not need this — leave blank.
     widget: text_field
     required: false

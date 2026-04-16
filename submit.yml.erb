@@ -12,5 +12,7 @@ script:
     - "<%= ram.blank? ? 4 : ram.to_i %>G"
     - "--cpus-per-task"
     - "<%= cores.blank? ? 1 : cores.to_i %>"<% if auto_queues.start_with?("gpu") %>
+    - "--account"
+    - "<%= gpu_account %>"
     - "--gpus-per-task"
     - "1"<% end %>

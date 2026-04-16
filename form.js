@@ -1,7 +1,7 @@
 // Map partition names to their time limits in hours
 const partitionMaxHours = {
-  "short":               30,
-  "long":               240,
+  "short":               30,   // 1-06:00:00
+  "long":               240,   // 10-00:00:00
   "himem":              240,
   "gpu_interactive":     12,
   "gpu_p100_16gb":       60,
@@ -18,22 +18,10 @@ const partitionMaxHours = {
   "cloudcomp":          240,
 };
 
-// All GPU partitions that require a Slurm GPU account
-const gpuPartitions = new Set([
-  "gpu_interactive",
-  "gpu_p100_16gb",
-  "gpu_v100_16gb",
-  "gpu_v100_32gb",
-  "gpu_a100_40gb",
-  "gpu_a100_80gb",
-  "gpu_rtx8000_48gb",
-  "gpu_gh200_144gb",
-]);
-
 function updateMaxHours() {
-  const partition   = $("#batch_connect_session_context_auto_queues").val();
-  const maxHours    = partitionMaxHours[partition] || 240;
-  const hoursField  = $("#batch_connect_session_context_bc_num_hours");
+  const partition  = $("#batch_connect_session_context_auto_queues").val();
+  const maxHours   = partitionMaxHours[partition] || 240;
+  const hoursField = $("#batch_connect_session_context_bc_num_hours");
 
   hoursField.attr("max", maxHours);
 
@@ -51,18 +39,16 @@ function updateMaxHours() {
 }
 
 function updateGpuAccountField() {
-  const partition      = $("#batch_connect_session_context_auto_queues").val();
-  const isGpu          = gpuPartitions.has(partition);
+  const partition       = $("#batch_connect_session_context_auto_queues").val();
+  const isGpu           = partition.startsWith("gpu_");
   const gpuAccountGroup = $("#batch_connect_session_context_gpu_account")
                             .closest(".form-group");
 
   if (isGpu) {
     gpuAccountGroup.show();
-    // Make the field required so the form won't submit without it
     $("#batch_connect_session_context_gpu_account").attr("required", true);
   } else {
     gpuAccountGroup.hide();
-    // Remove required and clear the value so it doesn't block submission
     $("#batch_connect_session_context_gpu_account")
       .removeAttr("required")
       .val("");
