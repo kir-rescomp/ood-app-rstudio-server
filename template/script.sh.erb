@@ -38,6 +38,36 @@ echo "Preparing rstudio configuration..."
 module load $RSTUDIO_MODULE
 module load <%= context.rmodule %>
 
+##########################################
+# Configure session state (XDG) location #
+##########################################
+# Open-source RStudio Server only permits one session at a time because it
+# locks its per-user session state under $XDG_DATA_HOME/rstudio (sessions,
+# suspended state). In "ephemeral" mode we redirect XDG_DATA_HOME and
+# XDG_CONFIG_HOME to a node-local scratch dir unique to this job, which lets
+# multiple concurrent sessions run without colliding. State is discarded at
+# session end. In "persistent" mode we leave the defaults (~/.local/share,
+# ~/.config) so the previous session resumes.
+
+if [[ "<%= context.session_mode %>" == "ephemeral" ]]; then
+    SESSION_SCRATCH="${TMPDIR:-/tmp}/ondemand-rstudio-xdg-<%= session.id %>"
+    mkdir -p "$SESSION_SCRATCH/data" "$SESSION_SCRATCH/config"
+    export XDG_DATA_HOME="$SESSION_SCRATCH/data"
+    export XDG_CONFIG_HOME="$SESSION_SCRATCH/config"
+
+    # Best-effort cleanup on normal exit / SIGTERM (walltime, scancel send TERM).
+    # Hard kills (node failure, SIGKILL) won't fire this - a Slurm epilog that
+    # wipes ondemand-rstudio-xdg-* is the reliable backstop if you want one.
+    trap 'rm -rf "$SESSION_SCRATCH"' EXIT TERM
+
+    # Sweep any stale ephemeral dirs left by previous hard-killed jobs
+    find "${TMPDIR:-/tmp}" -maxdepth 1 -type d \
+        -name "ondemand-rstudio-xdg-*" -user "$(whoami)" -mtime +2 \
+        -exec rm -rf {} + 2>/dev/null || true
+fi
+
+
+
 ################################################################
 # load the module helper script (if the user has supplied one) #
 ################################################################
