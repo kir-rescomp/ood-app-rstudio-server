@@ -65,6 +65,19 @@ attributes:
   bc_email_on_started: false
   auto_modules_RStudio-Server:
     default: false
+  session_mode:
+    label: Session persistence
+    help: >
+      <b>Persistent</b> resumes your previous session (workspace, open files,
+      command history) but only <b>one session can run at a time</b>.<br>
+      <b>Ephemeral</b> lets you run <b>multiple concurrent sessions</b>, but each
+      starts fresh and its RStudio state (open files, history, workspace image)
+      is discarded when the session ends. Your files on disk are unaffected.
+    widget: select
+    cachable: true
+    options:
+      - [ "Persistent (resume previous session, one at a time)", "persistent" ]
+      - [ "Ephemeral (allow multiple concurrent sessions)", "ephemeral" ]
 
 form:
   - auto_queues
@@ -76,3 +89,4 @@ form:
   - ram
   - bc_num_hours
   - bc_email_on_started
+  - session_mode
